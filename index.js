@@ -1,3 +1,6 @@
+// run this file using login credentials for Imagine Math:
+//  > node index.js [username] [password]
+
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 let students = [];
@@ -125,6 +128,8 @@ var scrapeStudentProfiles = async () => {
         // continue loop for all other students
     });
     
+    // ** still need to implement CSV file creation
+
     // write csv file
     const jsonStudentInfo = JSON.stringify(students);
     const csvStudentInfo = ConvertToCSV(jsonStudentInfo);
