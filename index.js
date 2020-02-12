@@ -1,12 +1,44 @@
 // run this file using login credentials for Imagine Math:
 //  > node index.js [username] [password]
 
-const startWithStudentNumber = 283;
-const endWithStudentNumber = 1000;
-
+// libraries
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const winston = require('winston');
+
+// constants
+const FIRST_STUDENT_TO_CRAWL = 300;
+const LAST_STUDENT_TO_CRAWL = 305;
+const IMAGINE_MATH_USERNAME = process.argv[2];
+const IMAGINE_MATH_PASSWORD = process.argv[3];
+
 let students = [];
+
+// set up logger
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    defaultMeta: { service: 'user-service' },
+    transports: [
+      //
+      // - Write to all logs with level `info` and below to `combined.log` 
+      // - Write all logs error (and below) to `error.log`.
+      //
+      new winston.transports.File({ filename: 'error.log', level: 'error' }),
+      new winston.transports.File({ filename: 'combined.log' })
+    ]
+  });
+   
+  //
+  // If we're not in production then log to the `console` with the format:
+  // `${info.level}: ${info.message} JSON.stringify({ ...rest }) `
+  // 
+  if (process.env.NODE_ENV !== 'production') {
+    logger.add(new winston.transports.Console({
+      format: winston.format.simple()
+    }));
+  }
+
 
 function delay(timeout) {
     return new Promise((resolve) => {
@@ -28,25 +60,6 @@ class StudentInfo {
     }
 }
 
-// JSON to CSV Converter
-function ConvertToCSV(objArray) {
-    var array = typeof objArray != 'object' ? JSON.parse(objArray) : objArray;
-    var str = '';
-
-    for (var i = 0; i < array.length; i++) {
-        var line = '';
-        for (var index in array[i]) {
-            if (line != '') line += ','
-
-            line += array[i][index];
-        }
-
-        str += line + '\r\n';
-    }
-
-    return str;
-}
-
 async function asyncForEach(array, callback) {
     for (let index = 0; index < array.length; index++) {
         await callback(array[index], index, array);
@@ -54,9 +67,10 @@ async function asyncForEach(array, callback) {
 }
 
 var scrapeStudentProfiles = async () => {
-    const username = process.argv[2];
-    const password = process.argv[3];
-    if (username == "" || password == "") throw new Error("Must pass Imagine Math username & password as arguments:> node index.js [username] [password]");
+    if (IMAGINE_MATH_USERNAME == "" || IMAGINE_MATH_PASSWORD == "") {
+        logger.error("Must pass Imagine Math username & password as arguments:> node index.js [username] [password]");
+        return;
+    }
 
     const browser = await puppeteer.launch({ });
     const page = await browser.newPage();
@@ -66,8 +80,8 @@ var scrapeStudentProfiles = async () => {
     await page.goto('https://math.imaginelearning.com/');
     
     // log in
-    await page.type('#student_username', username);
-    await page.type('#student_password', password);
+    await page.type('#student_username', IMAGINE_MATH_USERNAME);
+    await page.type('#student_password', IMAGINE_MATH_PASSWORD);
     await page.click('#btn_student_sign_in');
     await page.waitForNavigation();
 
@@ -77,7 +91,7 @@ var scrapeStudentProfiles = async () => {
     await asyncForEach(studentData, async (item, index) => {
         
         // control the subset of data to crawl
-        if (index < (startWithStudentNumber - 1) || index > (endWithStudentNumber - 1)) return;
+        if (index < (FIRST_STUDENT_TO_CRAWL - 1) || index > (LAST_STUDENT_TO_CRAWL - 1)) return;
 
         let student = new StudentInfo(item.First, item.Last, item.Grade, item["Math Period"], item["Student Progress Link"]);
         if(student.studentProgressLink.length == 0) return;
@@ -103,7 +117,7 @@ var scrapeStudentProfiles = async () => {
                 return document.querySelector('.name').innerHTML;
             });
             // save screenshot of most recent certificate
-            await page.screenshot({path: `crawled-images/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`});
+            await page.screenshot({path: `crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`});
 
             // get link to avatar SVG
             student.studentAvatarSVGUrl = await page.evaluate(() => {
@@ -113,50 +127,46 @@ var scrapeStudentProfiles = async () => {
             // download avatar SVG to a folder
             await page.goto(student.studentAvatarSVGUrl);
             let svgInline = await page.evaluate(() => document.querySelector('svg').outerHTML);
-            fs.writeFile(`crawled-images/${student.grade}-${student.last}-${student.first}-avatar.svg`, svgInline, (err) => {
+            fs.writeFile(`crawled-avatars/${student.grade}-${student.last}-${student.first}-avatar.svg`, svgInline, (err) => {
                 if (err) {
-                    console.error(err);
+                    logger.error(err);
                     return;
                 }
-                console.log(`SVG successfully saved for ${student.fullName} (index: ${index})`);
+                logger.info(`SVG successfully saved for ${student.fullName} (index: ${index})`);
             });
 
             
 
         } catch (error) {            
             await page.screenshot({path: `test-screenshots/Error-${student.grade}-${student.last}-${student.first}.png`});
-            console.error(`Error crawling student profile for ${student.first} ${student.last}: ` + error);
+            logger.error(`Error crawling student profile for ${student.first} ${student.last}: ` + error);
         }
 
         student.dateCrawled = Date(Date.now()).toString();
 
-        // save all the links we crawled to a CSV row to be added to a CSV file once we are all done
         students.push(student);
-        fs.appendFile('crawl-log.json', JSON.stringify(student) + ', \r\n', function (err) {
+        logger.info(Object.values(student).join(","));
+
+        // save new line to CSV file
+        fs.appendFile('crawl-log.csv', Object.values(student).join(",") + ', \r\n', function (err) {
             if (err) {
-                console.error(err);
+                logger.error(err);
                 return;
             }
-            console.log('Info logged to file: ' + JSON.stringify(student));
         });
         await delay(10000);
 
         // continue loop for all other students
     });
-    
-    // ** still need to implement CSV file creation
 
-    // write csv file
-    const jsonStudentInfo = JSON.stringify(students);
-    const csvStudentInfo = ConvertToCSV(jsonStudentInfo);
-    console.log(csvStudentInfo);
+    logger.info("Successfully completed crawl.");
 
     await browser.close();
 };
 
 
 scrapeStudentProfiles()
-    .catch((e) => {
-        console.error(e);
+    .catch((error) => {
+        logger.error(error);
         process.exit(1);
     });

@@ -1,5 +1,6 @@
 node_modules/
 test-screenshots/
-crawled-images/
+crawled-certificates/
+crawled-avatars/
 student-profile-data/
 crawl-log.json
