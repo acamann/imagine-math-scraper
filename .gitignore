@@ -1,1 +1,5 @@
 node_modules/
+test-screenshots/
+crawled-images/
+student-profile-data/
+crawl-log.json
