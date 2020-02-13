@@ -7,10 +7,10 @@ const fs = require('fs');
 const winston = require('winston');
 
 // constants
-const FIRST_STUDENT_TO_CRAWL = 255;
-const LAST_STUDENT_TO_CRAWL = 260;
 const IMAGINE_MATH_USERNAME = process.argv[2];
 const IMAGINE_MATH_PASSWORD = process.argv[3];
+const FIRST_STUDENT_TO_CRAWL = process.argv[4] || 0;      // 0 to start at beginning
+const LAST_STUDENT_TO_CRAWL = process.argv[5] || 1000;    // greater than max number of students to go through the end
 
 let students = [];
 
