@@ -1,7 +1,7 @@
 // run this file using login credentials for Imagine Math:
 //  > node index.js [username] [password]
 
-// libraries
+// library imports
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const winston = require('winston');
@@ -20,32 +20,52 @@ const logger = winston.createLogger({
     format: winston.format.json(),
     defaultMeta: { service: 'user-service' },
     transports: [
-      //
-      // - Write to all logs with level `info` and below to `combined.log` 
-      // - Write all logs error (and below) to `error.log`.
-      //
       new winston.transports.File({ filename: 'logs/error.log', level: 'error', 'timestamp':true }),
       new winston.transports.File({ filename: 'logs/combined.log', 'timestamp':true })
     ]
   });
    
-  //
-  // If we're not in production then log to the `console` with the format:
-  // `${info.level}: ${info.message} JSON.stringify({ ...rest }) `
-  // 
   if (process.env.NODE_ENV !== 'production') {
     logger.add(new winston.transports.Console({
       format: winston.format.simple()
     }));
   }
 
-
+// helper function for async delay
 function delay(timeout) {
     return new Promise((resolve) => {
         setTimeout(resolve, timeout);
     });
 }
 
+// helper function to traverse array asynchronously
+async function asyncForEach(array, callback) {
+    for (let index = 0; index < array.length; index++) {
+        await callback(array[index], index, array);
+    }
+}
+
+// helper function to screenshot only one DOM element
+async function screenshotDOMElement(page, selector, padding = 0, path) {
+    const rect = await page.evaluate(selector => {
+      const element = document.querySelector(selector);
+      const {x, y, width, height} = element.getBoundingClientRect();
+      return {left: x, top: y, width, height, id: element.id};
+    }, selector);
+  
+    return await page.screenshot({
+      path: path,
+      clip: {
+        x: rect.left - padding,
+        y: rect.top - padding,
+        width: rect.width + padding * 2,
+        height: rect.height + padding * 2
+      }
+    });
+  }
+
+
+// class to store student information from Imagine Math crawl
 class StudentInfo {
     constructor (first, last, grade, period, studentProgressLink, fullName = "", mostRecentCertificateUrl = "", studentAvatarSVGUrl = "", dateCrawled = "") {
         this.first = first;
@@ -60,11 +80,8 @@ class StudentInfo {
     }
 }
 
-async function asyncForEach(array, callback) {
-    for (let index = 0; index < array.length; index++) {
-        await callback(array[index], index, array);
-    }
-}
+
+// main app function, asynchronously log on, crawl each students' profile page for most recent certificate & avatar
 
 var scrapeStudentProfiles = async () => {
     if (IMAGINE_MATH_USERNAME == "" || IMAGINE_MATH_PASSWORD == "") {
@@ -116,8 +133,8 @@ var scrapeStudentProfiles = async () => {
             student.fullName = await page.evaluate(() => {
                 return document.querySelector('.name').innerHTML;
             });
-            // save screenshot of most recent certificate
-            await page.screenshot({path: `crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`});
+            // save screenshot of most recent certificate (only the certificate selector)
+            await screenshotDOMElement(page, '.frame', 0, `crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`);
 
             // get link to avatar SVG
             student.studentAvatarSVGUrl = await page.evaluate(() => {
@@ -165,8 +182,10 @@ var scrapeStudentProfiles = async () => {
 };
 
 
+// call the function
 scrapeStudentProfiles()
     .catch((error) => {
         logger.error(error);
+        browser.close();
         process.exit(1);
     });
