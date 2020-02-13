@@ -1,4 +1,0 @@
-{"level":"error","service":"user-service"}
-{"message":"Error crawling student profile for Maberyn Alcantara-Cruz: Error: ENOENT: no such file or directory, open 'C:\\Users\\acama\\Development\\imagine-math-scraper\\crawled-certificate\\5-Alcantara-Cruz-Maberyn-most-recent-certificate.png'","level":"error","service":"user-service"}
-{"message":"Error crawling student profile for Andres Alvarado: Error: ENOENT: no such file or directory, open 'C:\\Users\\acama\\Development\\imagine-math-scraper\\crawled-certificate\\5-Alvarado-Andres-most-recent-certificate.png'","level":"error","service":"user-service"}
-{"message":"Error crawling student profile for Nassiah Armstrong: TimeoutError: waiting for selector \".lessonActivity--certificate > a\" failed: timeout 20000ms exceeded","level":"error","service":"user-service"}

@@ -3,4 +3,4 @@ test-screenshots/
 crawled-certificates/
 crawled-avatars/
 student-profile-data/
-crawl-log.json
+logs/
