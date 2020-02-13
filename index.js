@@ -7,8 +7,8 @@ const fs = require('fs');
 const winston = require('winston');
 
 // constants
-const FIRST_STUDENT_TO_CRAWL = 300;
-const LAST_STUDENT_TO_CRAWL = 305;
+const FIRST_STUDENT_TO_CRAWL = 255;
+const LAST_STUDENT_TO_CRAWL = 260;
 const IMAGINE_MATH_USERNAME = process.argv[2];
 const IMAGINE_MATH_PASSWORD = process.argv[3];
 
@@ -24,8 +24,8 @@ const logger = winston.createLogger({
       // - Write to all logs with level `info` and below to `combined.log` 
       // - Write all logs error (and below) to `error.log`.
       //
-      new winston.transports.File({ filename: 'error.log', level: 'error' }),
-      new winston.transports.File({ filename: 'combined.log' })
+      new winston.transports.File({ filename: 'logs/error.log', level: 'error', 'timestamp':true }),
+      new winston.transports.File({ filename: 'logs/combined.log', 'timestamp':true })
     ]
   });
    
@@ -148,7 +148,7 @@ var scrapeStudentProfiles = async () => {
         logger.info(Object.values(student).join(","));
 
         // save new line to CSV file
-        fs.appendFile('crawl-log.csv', Object.values(student).join(",") + ', \r\n', function (err) {
+        fs.appendFile('logs/crawl-log.csv', Object.values(student).join(",") + ', \r\n', function (err) {
             if (err) {
                 logger.error(err);
                 return;
