@@ -31,11 +31,11 @@ const logger = winston.createLogger({
     ]
   });
    
-  if (process.env.NODE_ENV !== 'production') {
+  //if (process.env.NODE_ENV !== 'production') {
     logger.add(new winston.transports.Console({
       format: winston.format.simple()
     }));
-  }
+  //}
 
 // helper function for async delay
 function delay(timeout) {
@@ -199,7 +199,7 @@ app.listen(PORT, () => {
 var APP = {
     scheduleJob: function() {
       // This rule is standard cron syntax for once per day.
-      rule = '0 0 * * 1,2,3,4,5'
+      rule = process.env.CRON_RULE || '1/5 * * * 1,2,3,4,5';
   
       // Kick off the job
       var job = schedule.scheduleJob(rule, function() {
