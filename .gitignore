@@ -1,6 +1,5 @@
 node_modules/
-test-screenshots/
-crawled-certificates/
-crawled-avatars/
-student-profile-data/
-logs/
+test-screenshots/*
+crawled-certificates/*
+crawled-avatars/*
+logs/*
