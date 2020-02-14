@@ -6,6 +6,11 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const winston = require('winston');
 const schedule = require('node-schedule');
+const express = require('express');
+
+const app = express();
+
+const PORT = process.env.PORT || 3000;
 
 // constants
 const IMAGINE_MATH_USERNAME = process.env.IMAGINE_MATH_USERNAME || process.argv[2];
@@ -183,7 +188,14 @@ var scrapeStudentProfiles = async () => {
 };
 
 
+// start server
+app.listen(PORT, () => {
+  logger.info(`Our app is running on port ${ PORT }`);
+});
 
+
+
+// schedule jobs to crawl Imagine Math
 var APP = {
     scheduleJob: function() {
       // This rule is standard cron syntax for once per day.
