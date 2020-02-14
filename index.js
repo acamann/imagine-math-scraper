@@ -199,7 +199,7 @@ app.listen(PORT, () => {
 var APP = {
     scheduleJob: function() {
       // This rule is standard cron syntax for once per day.
-      rule = process.env.CRON_RULE || '1/5 * * * 1,2,3,4,5';
+      rule = process.env.CRON_RULE || '0 0 * * 1,2,3,4,5';
   
       // Kick off the job
       var job = schedule.scheduleJob(rule, function() {
