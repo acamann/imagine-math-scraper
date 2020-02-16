@@ -1,0 +1,1 @@
+This empty folder will house the svg data file crawled by puppeteer for each students' most recent avatar.  Each student's file will be overwritten with each subsequent crawl.

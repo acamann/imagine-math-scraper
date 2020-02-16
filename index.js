@@ -1,11 +1,12 @@
 // run this file using login credentials for Imagine Math:
-//  > node index.js [username] [password]
+//  > node index.js [username] [password] [start-index] [end-index]
+//  username & password can also be stored in process env variables
+//  default start-index = 0, default end-index = 1000
 
 // library imports
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const winston = require('winston');
-const schedule = require('node-schedule');
 const express = require('express');
 
 const app = express();
@@ -18,7 +19,8 @@ const IMAGINE_MATH_PASSWORD = process.env.IMAGINE_MATH_PASSWORD || process.argv[
 const FIRST_STUDENT_TO_CRAWL = process.argv[4] || 0;      // 0 to start at beginning
 const LAST_STUDENT_TO_CRAWL = process.argv[5] || 1000;    // greater than max number of students to go through the end
 
-//let students = [];
+let students = [];
+
 
 // set up logger
 const logger = winston.createLogger({
@@ -36,6 +38,17 @@ const logger = winston.createLogger({
       format: winston.format.simple()
     }));
   //}
+  
+
+// start server
+app.listen(PORT, () => {
+  logger.info(`Our app is running on port ${ PORT }`);
+});
+
+
+
+
+// HELPER FUNCTIONS
 
 // helper function for async delay
 function delay(timeout) {
@@ -87,17 +100,25 @@ class StudentInfo {
 }
 
 
+
+
 // main app function, asynchronously log on, crawl each students' profile page for most recent certificate & avatar
 
 var scrapeStudentProfiles = async () => {
+
+    logger.info("Async scrape started");
+
     if (IMAGINE_MATH_USERNAME == "" || IMAGINE_MATH_PASSWORD == "") {
         logger.error("Must pass Imagine Math username & password as arguments:> node index.js [username] [password]");
         return;
     }
 
+    // initialize puppeteer tools
     const browser = await puppeteer.launch({ });
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800});
+
+    logger.info("Browser started");
 
     // go to log in page
     await page.goto('https://math.imaginelearning.com/');
@@ -107,6 +128,11 @@ var scrapeStudentProfiles = async () => {
     await page.type('#student_password', IMAGINE_MATH_PASSWORD);
     await page.click('#btn_student_sign_in');
     await page.waitForNavigation();
+    
+    // TO DO:
+    // - grab last crawl date
+    // - go to imagine math report for all passed lessons since previous crawl
+    // - limit subset of students to only those who have passed a lesson since last crawl
 
     // fetch json data of all student profile pages:
     let rawStudentData = fs.readFileSync("./student-profile-data/student-profile-links.json");
@@ -116,6 +142,7 @@ var scrapeStudentProfiles = async () => {
         // control the subset of data to crawl
         if (index < (FIRST_STUDENT_TO_CRAWL - 1) || index > (LAST_STUDENT_TO_CRAWL - 1)) return;
 
+        
         let student = new StudentInfo(item.First, item.Last, item.Grade, item["Math Period"], item["Student Progress Link"]);
         if(student.studentProgressLink.length == 0) return;
 
@@ -167,7 +194,7 @@ var scrapeStudentProfiles = async () => {
 
         student.dateCrawled = Date(Date.now()).toString();
 
-        //students.push(student);
+        students.push(student);
         logger.info(Object.values(student).join(","));
 
         // save new line to CSV file
@@ -182,47 +209,21 @@ var scrapeStudentProfiles = async () => {
         // continue loop for all other students
     });
 
-    logger.info("Successfully completed crawl.");
-
     await browser.close();
+    logger.info("Browser closed");
 };
 
 
-// start server
-app.listen(PORT, () => {
-  logger.info(`Our app is running on port ${ PORT }`);
-});
 
-
-
-// schedule jobs to crawl Imagine Math
-var APP = {
-    scheduleJob: function() {
-      // This rule is standard cron syntax for once per day.
-      rule = process.env.CRON_RULE || '1/5 * * * 1,2,3,4,5';
-  
-      // Kick off the job
-      var job = schedule.scheduleJob(rule, function() {
-        logger.info('The scheduled job is now running.');
-        
-        // call the function to perform the scrape
-        scrapeStudentProfiles()
-            .catch((error) => {
-                logger.error(error);
-                browser.close();
-                process.exit(1);
+// call the function to perform the scrape
+scrapeStudentProfiles()
+    .catch((error) => {
+        logger.error(error);
+    })
+    .finally(() => {
+        logger.info("Student data crawled: " + JSON.stringify(students));
+        logger.info("End of script.");
+        //browser.close();
+        //logger.info("Browser closed");
     });
-      });
-    },
-  
-    init: function() {
-      APP.scheduleJob();
-      logger.info('The app is initialized & the crawl job is scheduled.');
-    }
-  };
-  
-(function(){
-APP.init();
-})();
-
 

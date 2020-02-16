@@ -1,5 +1,16 @@
 node_modules/
+
+student-profile-data/*
+!student-profile-data/README.md
+
 test-screenshots/*
+!test-screenshots/README.md
+
 crawled-certificates/*
+!crawled-certificates/README.md
+
 crawled-avatars/*
+!crawled-avatars/README.md
+
 logs/*
+!logs/README.md
