@@ -49,7 +49,7 @@ logger.add(
 );
 //}
 
-start server
+// start server
 app.listen(PORT, () => {
  logger.info(`Our app is running on port ${PORT}`);
 });
