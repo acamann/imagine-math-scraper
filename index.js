@@ -7,11 +7,11 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const winston = require("winston");
-// const express = require("express");
+const express = require("express");
 
-// const app = express();
+const app = express();
 
-// const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 // constants
 const IMAGINE_MATH_USERNAME =
@@ -49,10 +49,10 @@ logger.add(
 );
 //}
 
-// start server
-//app.listen(PORT, () => {
-//  logger.info(`Our app is running on port ${PORT}`);
-//});
+start server
+app.listen(PORT, () => {
+ logger.info(`Our app is running on port ${PORT}`);
+});
 
 // HELPER FUNCTIONS
 
