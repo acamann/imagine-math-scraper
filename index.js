@@ -4,12 +4,14 @@
 //  default start-index = 0, default end-index = 1000
 
 // library imports
+const dotenv = require('dotenv');
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const winston = require("winston");
 const express = require("express");
 
 const app = express();
+dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
@@ -27,15 +29,14 @@ let students = [];
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.json(),
-  defaultMeta: { service: "user-service" },
   transports: [
     new winston.transports.File({
-      filename: "logs/error.log",
+      filename: `${__dirname}/logs/error.log`,
       level: "error",
       timestamp: true
     }),
     new winston.transports.File({
-      filename: "logs/combined.log",
+      filename: `${__dirname}combined.log`,
       timestamp: true
     })
   ]
@@ -154,7 +155,7 @@ async function scrapeStudentProfiles() {
 
   // fetch json data of all student profile pages:
   let rawStudentData = fs.readFileSync(
-    "./student-profile-data/student-data.json"
+    `${__dirname}/student-profile-data/student-data.json`
   );
   let studentData = JSON.parse(rawStudentData);
   await asyncForEach(studentData, async (item, index) => {
@@ -198,7 +199,7 @@ async function scrapeStudentProfiles() {
         page,
         ".frame",
         0,
-        `crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`
+        `${__dirname}/crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`
       );
 
       // get link to avatar SVG
@@ -212,7 +213,7 @@ async function scrapeStudentProfiles() {
         () => document.querySelector("svg").outerHTML
       );
       fs.writeFile(
-        `crawled-avatars/${student.grade}-${student.last}-${student.first}-avatar.svg`,
+        `${__dirname}/crawled-avatars/${student.grade}-${student.last}-${student.first}-avatar.svg`,
         svgInline,
         err => {
           if (err) {
@@ -226,7 +227,7 @@ async function scrapeStudentProfiles() {
       );
     } catch (error) {
       await page.screenshot({
-        path: `test-screenshots/Error-${student.grade}-${student.last}-${student.first}.png`
+        path: `${__dirname}/test-screenshots/Error-${student.grade}-${student.last}-${student.first}.png`
       });
       logger.error(
         `Error crawling student profile for ${student.first} ${student.last}: ` +
@@ -241,7 +242,7 @@ async function scrapeStudentProfiles() {
 
     // save new line to CSV file
     fs.appendFile(
-      "logs/crawl-log.csv",
+      `${__dirname}/logs/crawl-log.csv`,
       Object.values(student).join(",") + ", \r\n",
       function(err) {
         if (err) {
