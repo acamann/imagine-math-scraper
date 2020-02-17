@@ -154,7 +154,7 @@ async function scrapeStudentProfiles() {
 
   // fetch json data of all student profile pages:
   let rawStudentData = fs.readFileSync(
-    "./student-profile-data/student-profile-links.json"
+    "./student-profile-data/student-data.json"
   );
   let studentData = JSON.parse(rawStudentData);
   await asyncForEach(studentData, async (item, index) => {

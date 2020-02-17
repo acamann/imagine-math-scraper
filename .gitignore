@@ -2,6 +2,7 @@ node_modules/
 
 student-profile-data/*
 !student-profile-data/README.md
+!student-profile-data/student-data.json
 
 test-screenshots/*
 !test-screenshots/README.md
