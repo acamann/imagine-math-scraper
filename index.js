@@ -121,13 +121,15 @@ async function scrapeStudentProfiles() {
 
   if (IMAGINE_MATH_USERNAME == "" || IMAGINE_MATH_PASSWORD == "") {
     logger.error(
-      "Must pass Imagine Math username & password as arguments:> node index.js [username] [password]"
+      "Must pass Imagine Math username & password as arguments:> node index.js [username] [password], or using process.env variables"
     );
     return;
   }
 
   // initialize puppeteer tools
-  const browser = await puppeteer.launch({});
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
@@ -141,6 +143,9 @@ async function scrapeStudentProfiles() {
   await page.type("#student_password", IMAGINE_MATH_PASSWORD);
   await page.click("#btn_student_sign_in");
   await page.waitForNavigation();
+  await page.screenshot({
+    path: `test-screenshots/login-page.png`
+  });
 
   // TO DO:
   // - grab last crawl date
@@ -256,9 +261,9 @@ async function scrapeStudentProfiles() {
 
 // call the function to perform the scrape
 scrapeStudentProfiles()
-  // .catch((error) => {
-  //     logger.error(error);
-  // })
+  .catch(error => {
+       logger.error(error);
+  })
   .finally(() => {
     //logger.info("Student data crawled: " + JSON.stringify(students));
     logger.info("End of crawl.");

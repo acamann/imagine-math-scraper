@@ -1,5 +1,8 @@
 {
   "name": "imagine-math-scraper",
+  "engines": {
+    "node": "12.13.1"
+  },
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
