@@ -4,14 +4,14 @@
 //  default start-index = 0, default end-index = 1000
 
 // library imports
-const dotenv = require('dotenv');
+const dotenv = require('dotenv').config();
 const puppeteer = require("puppeteer");
 const fs = require("fs");
+const dfs = require('dropbox-fs')({ apiKey: process.env.DROPBOX_API_KEY });
 const winston = require("winston");
 const express = require("express");
 
 const app = express();
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
@@ -36,7 +36,7 @@ const logger = winston.createLogger({
       timestamp: true
     }),
     new winston.transports.File({
-      filename: `${__dirname}combined.log`,
+      filename: `${__dirname}/logs/combined.log`,
       timestamp: true
     })
   ]
@@ -71,6 +71,20 @@ async function asyncForEach(array, callback) {
   }
 }
 
+// helper function to upload to Dropbox
+function dropboxPromise(screenShotResult, dropboxPathAndFileName) {
+  return new Promise(function(res, rej){
+    dfs.writeFile(dropboxPathAndFileName, screenShotResult, {encoding: 'utf8'}, (err, stat) => {
+      if (err) {
+        logger.error('Upload to dropbox failed: ', err);
+        rej(err);
+      }
+      logger.info(stat.name);
+      res(stat.name)
+    })
+  })
+}
+
 // helper function to screenshot only one DOM element
 async function screenshotDOMElement(page, selector, padding = 0, path) {
   const rect = await page.evaluate(selector => {
@@ -79,8 +93,7 @@ async function screenshotDOMElement(page, selector, padding = 0, path) {
     return { left: x, top: y, width, height, id: element.id };
   }, selector);
 
-  return await page.screenshot({
-    path: path,
+  let elementScreenshot = await page.screenshot({
     clip: {
       x: rect.left - padding,
       y: rect.top - padding,
@@ -88,6 +101,42 @@ async function screenshotDOMElement(page, selector, padding = 0, path) {
       height: rect.height + padding * 2
     }
   });
+
+  if (elementScreenshot) {
+    return dropboxPromise(elementScreenshot, path);
+  } else {
+    return null;
+  }
+}
+
+// helper function to convert array of objects to csv format
+function objectArrayToCSV(data = null, columnDelimiter = ",", lineDelimiter = "\n") {
+	let result, ctr, keys
+
+	if (data === null || !data.length) {
+		return null
+	}
+
+	keys = Object.keys(data[0])
+
+	result = ""
+	result += keys.join(columnDelimiter)
+	result += lineDelimiter
+
+	data.forEach(item => {
+		ctr = 0
+		keys.forEach(key => {
+			if (ctr > 0) {
+				result += columnDelimiter
+			}
+
+			result += typeof item[key] === "string" && item[key].includes(columnDelimiter) ? `"${item[key]}"` : item[key]
+			ctr++
+		})
+		result += lineDelimiter
+	})
+
+	return result
 }
 
 // class to store student information from Imagine Math crawl
@@ -144,9 +193,6 @@ async function scrapeStudentProfiles() {
   await page.type("#student_password", IMAGINE_MATH_PASSWORD);
   await page.click("#btn_student_sign_in");
   await page.waitForNavigation();
-  await page.screenshot({
-    path: `test-screenshots/login-page.png`
-  });
 
   // TO DO:
   // - grab last crawl date
@@ -199,7 +245,7 @@ async function scrapeStudentProfiles() {
         page,
         ".frame",
         0,
-        `${__dirname}/crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`
+        `/crawled-certificates/${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`
       );
 
       // get link to avatar SVG
@@ -212,45 +258,30 @@ async function scrapeStudentProfiles() {
       let svgInline = await page.evaluate(
         () => document.querySelector("svg").outerHTML
       );
-      fs.writeFile(
-        `${__dirname}/crawled-avatars/${student.grade}-${student.last}-${student.first}-avatar.svg`,
+      dfs.writeFile(
+        `/crawled-avatars/${student.grade}-${student.last}-${student.first}-avatar.svg`,
         svgInline,
-        err => {
+        {encoding: 'utf8'},
+        (err, stat) => {
           if (err) {
-            logger.error(err);
+            logger.error("Upload to Dropbox failed for SVG file: ", err);
             return;
           }
           logger.info(
-            `SVG successfully saved for ${student.fullName} (index: ${index})`
+            `SVG successfully saved to dropbox for ${student.fullName}: ${stat.name}`
           );
         }
       );
     } catch (error) {
-      await page.screenshot({
-        path: `${__dirname}/test-screenshots/Error-${student.grade}-${student.last}-${student.first}.png`
-      });
       logger.error(
-        `Error crawling student profile for ${student.first} ${student.last}: ` +
-          error
+        `Error crawling student profile for ${student.first} ${student.last}: `, error
       );
     }
 
-    student.dateCrawled = Date(Date.now()).toString();
+    student.dateCrawled = new Date().toISOString().slice(0, 19);
 
     students.push(student);
-    logger.info(Object.values(student).join(","));
 
-    // save new line to CSV file
-    fs.appendFile(
-      `${__dirname}/logs/crawl-log.csv`,
-      Object.values(student).join(",") + ", \r\n",
-      function(err) {
-        if (err) {
-          logger.error(err);
-          return;
-        }
-      }
-    );
     await delay(10000);
 
     // continue loop for all other students
@@ -260,14 +291,28 @@ async function scrapeStudentProfiles() {
   logger.info("Browser closed");
 };
 
+
+
 // call the function to perform the scrape
+
 scrapeStudentProfiles()
   .catch(error => {
        logger.error(error);
   })
   .finally(() => {
-    //logger.info("Student data crawled: " + JSON.stringify(students));
+    dfs.writeFile(
+      `/crawl-log-${new Date().toISOString().slice(0, 19)}.csv`,
+      objectArrayToCSV(students),
+      {encoding: 'utf8'},
+      (err, stat) => {
+        if (err) {
+          logger.error("Upload to Dropbox failed for CSV file of crawl: ", err);
+          return;
+        }
+        logger.info(
+          `CSV log successfully saved to dropbox`
+        );
+      }
+    );
     logger.info("End of crawl.");
-    //browser.close();
-    //logger.info("Browser closed");
   });
