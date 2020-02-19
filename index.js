@@ -10,6 +10,7 @@ const fs = require("fs");
 const dfs = require('dropbox-fs')({ apiKey: process.env.DROPBOX_API_KEY });
 const winston = require("winston");
 const express = require("express");
+const moment = require("moment");
 
 const app = express();
 
@@ -72,7 +73,7 @@ async function asyncForEach(array, callback) {
 }
 
 // helper function to upload to Dropbox
-function dropboxPromise(screenShotResult, dropboxPathAndFileName) {
+function dropboxUploadScreenshotPromise(screenShotResult, dropboxPathAndFileName) {
   return new Promise(function(res, rej){
     dfs.writeFile(dropboxPathAndFileName, screenShotResult, {encoding: 'utf8'}, (err, stat) => {
       if (err) {
@@ -81,6 +82,23 @@ function dropboxPromise(screenShotResult, dropboxPathAndFileName) {
       }
       logger.info('File successfully saved to dropbox: ' + stat.name);
       res(stat.name)
+    })
+  })
+}
+
+
+async function getDateOfLastCrawl() {
+  return dropboxReadPromise('/last-successful-crawl.json');
+}
+
+function dropboxReadPromise(path) {
+  return new Promise(function(res, rej){
+    dfs.readFile(path, {encoding: 'utf8'}, (err, result) => {
+      if (err) {
+        logger.error('Unable to read file in Dropbox', err);
+        rej(err);
+      }
+      res(result.slice(1, -1));
     })
   })
 }
@@ -103,7 +121,7 @@ async function screenshotDOMElement(page, selector, padding = 0, path) {
   });
 
   if (elementScreenshot) {
-    return dropboxPromise(elementScreenshot, path);
+    return dropboxUploadScreenshotPromise(elementScreenshot, path);
   } else {
     return null;
   }
@@ -150,7 +168,8 @@ class StudentInfo {
     fullName = "",
     mostRecentCertificateUrl = "",
     studentAvatarSVGUrl = "",
-    dateCrawled = ""
+    dateCrawled = "",
+    profileId = ""
   ) {
     this.first = first;
     this.last = last;
@@ -161,6 +180,7 @@ class StudentInfo {
     this.mostRecentCertificateUrl = mostRecentCertificateUrl;
     this.studentAvatarSVGUrl = studentAvatarSVGUrl;
     this.dateCrawled = dateCrawled;
+    this.profileId = profileId;
   }
 }
 
@@ -194,19 +214,43 @@ async function scrapeStudentProfiles() {
   await page.click("#btn_student_sign_in");
   await page.waitForNavigation();
 
-  // TO DO:
-  // - read list of certificates in dropbox folder
-  let alreadyCrawled = [];
-  dfs.readdir('/crawled-certificates/', (err, result) => {
-      // - create alreadyCrawled array
-      alreadyCrawled = result;
-  });
-  // - within asyncForEach below, return if student exists in alreadyCrawled (move to next student)
-
-  // UPCOMING VERSION:
   // - grab last crawl date
-  // - go to imagine math report for all passed lessons since previous crawl
-  // - limit subset of students to only those who have passed a lesson since last crawl
+  let startDateForReportSearch = await getDateOfLastCrawl();
+  // set last date of current crawl to yesterday
+  let endDateForReportSearch = moment().subtract(1, 'days').format('YYYY-M-D');
+
+  // build array of students with new certificates to cross-reference
+  let studentProfileIDsForRecentCertificates = [];
+
+  try {
+    // - go to imagine math report for all passed lessons since previous crawl
+    const recentUsageReportUrl = `https://math.imaginelearning.com/reports/overview_report#level_to_show=student&start_date=${startDateForReportSearch}&end_date=${endDateForReportSearch}&page=1&rows_per_page=400&order_by=total_lessons_passed&sort=desc`
+    await page.goto(recentUsageReportUrl);
+    await page.waitForSelector("tr.overview-report--student", { timeout: 15000 });
+    
+    // select all the tr.overview-report--student rows
+    studentProfileIDsForRecentCertificates = await page.evaluate(() => {
+       let reportRows = [
+         ...document.querySelectorAll("tr.overview-report--student")
+       ];
+       return reportRows.filter(row => {
+          // skip rows that do not have a passed lesson within this date range
+          let passedLessons = row.querySelectorAll("td")[4].innerText;
+          return ( passedLessons > 0 );            
+       }).map(row => {
+          // return studentId to add to profile link
+          let studentIdLink = row.querySelector('a.indicator-expandClassrooms');
+          return studentIdLink.getAttribute("data-student"); {
+         }
+       });
+    });
+
+    logger.info("Crawl for following students with recent certificates: " + studentProfileIDsForRecentCertificates);
+
+  } catch (error) {
+    logger.error(error);
+    return;
+  }  
 
   // fetch json data of all student profile pages:
   let rawStudentData = fs.readFileSync(
@@ -229,13 +273,12 @@ async function scrapeStudentProfiles() {
 
     // break for any student with no profile link
     if (student.studentProgressLink.length == 0) return;
-
-    // break for any student already crawled (imagine in Dropbox certificate folder)
-    if (alreadyCrawled.includes(`${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`)) {
-      logger.info(`Certificate previously saved for ${student.first} ${student.last} (${student.grade})`);
-      return;
-    }
     
+    // break for any student with no recent certificate 
+    // (compare subset of profile link to ID in array of recent certificates)
+    student.ProfileId = student.studentProgressLink.substr(student.studentProgressLink.length - 8);
+    if (!studentProfileIDsForRecentCertificates.includes(student.ProfileId)) return;
+
     try {
       // go to each student profile page
       await page.goto(student.studentProgressLink);
@@ -320,6 +363,7 @@ scrapeStudentProfiles()
        logger.error(error);
   })
   .finally(() => {
+
     dfs.writeFile(
       `/crawl-log-${new Date().toISOString().slice(0, 19)}.csv`,
       objectArrayToCSV(students),
@@ -332,5 +376,19 @@ scrapeStudentProfiles()
         logger.info("CSV log successfully saved to dropbox: " + stat.name);
       }
     );
+
+    dfs.writeFile(
+      `/last-successful-crawl.json`,
+      moment().format("YYYY-M-D"),
+      {encoding: 'utf8'},
+      (err, stat) => {
+        if (err) {
+          logger.error("Upload to Dropbox failed to store last successful crawl: ", err);
+          return;
+        }
+        logger.info("Crawl date successfully saved to dropbox: " + stat.name);
+      }
+    );
+
     logger.info("End of crawl.");
   });
