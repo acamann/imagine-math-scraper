@@ -10,6 +10,7 @@ const fs = require("fs");
 const dfs = require('dropbox-fs')({ apiKey: process.env.DROPBOX_API_KEY });
 const winston = require("winston");
 const express = require("express");
+const moment = require("moment");
 
 const app = express();
 
@@ -194,19 +195,22 @@ async function scrapeStudentProfiles() {
   await page.click("#btn_student_sign_in");
   await page.waitForNavigation();
 
-  // TO DO:
-  // - read list of certificates in dropbox folder
-  let alreadyCrawled = [];
-  dfs.readdir('/crawled-certificates/', (err, result) => {
-      // - create alreadyCrawled array
-      alreadyCrawled = result;
-  });
-  // - within asyncForEach below, return if student exists in alreadyCrawled (move to next student)
-
   // UPCOMING VERSION:
   // - grab last crawl date
+  let startDateForReportSearch = await dfs.readFile('/last-successful-crawl.json', (err, result) => {
+    if (err) { 
+      logger.err(err);
+    }
+    return JSON.parse(result.toString('utf8'));
+  });
+  //let today = new Date();
+  //let yesterday = today.setDate(today.getDate() - 1);
+  let endDateForReportSearch = moment().format('YYYY-M-D');
+  logger.info(startDateForReportSearch);
+  logger.info(endDateForReportSearch);
+
   // - go to imagine math report for all passed lessons since previous crawl
-  // - limit subset of students to only those who have passed a lesson since last crawl
+  // - limit subset of students to only those who have passed a lesson since last crawl (by comparing progress link to JSON file?)
 
   // fetch json data of all student profile pages:
   let rawStudentData = fs.readFileSync(
@@ -229,13 +233,9 @@ async function scrapeStudentProfiles() {
 
     // break for any student with no profile link
     if (student.studentProgressLink.length == 0) return;
-
-    // break for any student already crawled (imagine in Dropbox certificate folder)
-    if (alreadyCrawled.includes(`${student.grade}-${student.last}-${student.first}-most-recent-certificate.png`)) {
-      logger.info(`Certificate previously saved for ${student.first} ${student.last} (${student.grade})`);
-      return;
-    }
     
+    // break for any student with no recent certificate
+
     try {
       // go to each student profile page
       await page.goto(student.studentProgressLink);
@@ -320,6 +320,7 @@ scrapeStudentProfiles()
        logger.error(error);
   })
   .finally(() => {
+
     dfs.writeFile(
       `/crawl-log-${new Date().toISOString().slice(0, 19)}.csv`,
       objectArrayToCSV(students),
@@ -332,5 +333,19 @@ scrapeStudentProfiles()
         logger.info("CSV log successfully saved to dropbox: " + stat.name);
       }
     );
+
+    dfs.writeFile(
+      `/last-successful-crawl.json`,
+      JSON.stringify(`2020-2-15`),
+      {encoding: 'utf8'},
+      (err, stat) => {
+        if (err) {
+          logger.error("Upload to Dropbox failed to store last successful crawl: ", err);
+          return;
+        }
+        logger.info("Crawl date successfully saved to dropbox: " + stat.name);
+      }
+    );
+
     logger.info("End of crawl.");
   });
