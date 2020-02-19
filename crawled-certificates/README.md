@@ -1,0 +1,1 @@
+This empty folder will house the png screenshot files crawled by puppeteer for each students' most recently passed lesson.  Each student's image will be overwritten with each subsequent crawl.
