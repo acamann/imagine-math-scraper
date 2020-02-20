@@ -98,7 +98,7 @@ function dropboxReadPromise(path) {
         logger.error('Unable to read file in Dropbox', err);
         rej(err);
       }
-      res(result.slice(1, -1));
+      res(result);
     })
   })
 }
@@ -218,6 +218,10 @@ async function scrapeStudentProfiles() {
   let startDateForReportSearch = await getDateOfLastCrawl();
   // set last date of current crawl to yesterday
   let endDateForReportSearch = moment().subtract(1, 'days').format('YYYY-M-D');
+  if (moment(startDateForReportSearch, 'YYYY-M-D').isAfter(moment(endDateForReportSearch, 'YYYY-M-D'))) {
+    endDateForReportSearch = startDateForReportSearch;
+  }
+  logger.info(`Crawl for recently passed lessons within range: ${startDateForReportSearch} - ${endDateForReportSearch}`);
 
   // build array of students with new certificates to cross-reference
   let studentProfileIDsForRecentCertificates = [];
@@ -386,7 +390,7 @@ scrapeStudentProfiles()
           logger.error("Upload to Dropbox failed to store last successful crawl: ", err);
           return;
         }
-        logger.info("Crawl date successfully saved to dropbox: " + stat.name);
+        logger.info(`Crawl date (${moment().format("YYYY-M-D")}) successfully saved to dropbox: ${stat.name}`);
       }
     );
 
