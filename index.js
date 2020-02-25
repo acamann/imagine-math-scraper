@@ -11,6 +11,8 @@ const dfs = require('dropbox-fs')({ apiKey: process.env.DROPBOX_API_KEY });
 const winston = require("winston");
 const express = require("express");
 const moment = require("moment");
+const https = require('https');
+const querystring = require('querystring');
 
 const app = express();
 
@@ -121,6 +123,10 @@ async function screenshotDOMElement(page, selector, padding = 0, path) {
   });
 
   if (elementScreenshot) {
+    // save screenshot to info-beamer NOT WORKING!
+    //postCertificateToInfoBeamer(elementScreenshot, path);
+
+    // save screenshot to dropbox
     return dropboxUploadScreenshotPromise(elementScreenshot, path);
   } else {
     return null;
@@ -183,6 +189,35 @@ class StudentInfo {
     this.profileId = profileId;
   }
 }
+
+// helper function to send crawled certificate to info-beamer pi API
+function postCertificateToInfoBeamer(imageData, fileName) {
+  const options = {
+    host: "info-beamer.com",
+    path: "/api/v1/asset/upload",
+    method: "POST",
+    headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${process.env.INFO_BEAMER_API_KEY}`
+    },
+    body: {
+        "file": `@${imageData};filename=${fileName}`
+    }
+  };
+
+  var req = https.request(options, (res) => {
+    logger.info( `statusCode: ${res.statusCode}`);
+    logger.info( `headers: ${res.headers}`);
+    res.on("data", (d) => {
+      process.stdout.write(d);
+    });
+  })
+
+  req.on('error', (error) => {
+    logger.error(error);
+  })
+}
+
 
 // main app function, asynchronously log on, crawl each students' profile page for most recent certificate & avatar
 
