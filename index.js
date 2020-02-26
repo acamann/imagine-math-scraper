@@ -124,7 +124,7 @@ async function screenshotDOMElement(page, selector, padding = 0, path) {
 
   if (elementScreenshot) {
     // save screenshot to info-beamer NOT WORKING!
-    //postCertificateToInfoBeamer(elementScreenshot, path);
+    postCertificateToInfoBeamer(elementScreenshot, path);
 
     // save screenshot to dropbox
     return dropboxUploadScreenshotPromise(elementScreenshot, path);
@@ -191,17 +191,19 @@ class StudentInfo {
 }
 
 // helper function to send crawled certificate to info-beamer pi API
-function postCertificateToInfoBeamer(imageData, fileName) {
+async function postCertificateToInfoBeamer(imageData, fileName) {
   const options = {
+    method: "POST",
     host: "info-beamer.com",
     path: "/api/v1/asset/upload",
-    method: "POST",
     headers: {
         "Content-Type": "application/x-www-form-urlencoded",
+        'Content-Length': Buffer.byteLength(imageData),
         "Authorization": `Bearer ${process.env.INFO_BEAMER_API_KEY}`
     },
     body: {
-        "file": `@${imageData};filename=${fileName}`
+        "file": imageData,
+        "filename": fileName
     }
   };
 
